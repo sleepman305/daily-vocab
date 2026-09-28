@@ -45,6 +45,7 @@
         <button class="chip" id="levelChip" aria-haspopup="dialog"><span class="chip-k">Cấp</span> <span id="levelChipVal">Cơ bản</span> <i class="caret"></i></button>
         <button class="chip" id="topicChip" aria-haspopup="dialog"><span class="chip-k">Chủ đề</span> <span id="topicChipVal">Tất cả</span> <i class="caret"></i></button>
         <button class="chip" id="timerChip" aria-haspopup="dialog">⏱ <span id="timerChipVal">15 giây</span></button>
+        <button class="chip" id="autoChip" aria-haspopup="dialog">⏭ <span id="autoChipVal">Tự chuyển: Tắt</span></button>
       </div>
 
       <!-- Thẻ học -->
@@ -181,6 +182,8 @@
       <div class="group">
         <h3 class="group-title">Buổi học</h3>
         <div class="row"><span>Thời gian đoán</span><div class="seg sm" id="setDuration"></div></div>
+        <div class="row"><span>Tự chuyển từ tiếp theo</span><div class="seg sm" id="setAutoNext"></div></div>
+        <p class="group-note">Sau khi mở đáp án, app tự chấm và sang từ mới: gõ đúng → “Đã nhớ”, hết giờ hoặc bấm xem đáp án → “Chưa nhớ”. Chạm “Dừng” để tự chấm tay.</p>
         <div class="row"><span>Số từ mỗi lượt</span><div class="seg sm" id="setSize"></div></div>
         <div class="row"><span>Mục tiêu mỗi ngày</span><div class="seg sm" id="setGoal"></div></div>
       </div>
@@ -216,7 +219,7 @@
         <p>Nghĩa tiếng Việt từ tiếng Trung: <a href="https://github.com/ph0ngp/CVDICT" target="_blank" rel="noopener">CVDICT</a> của Phong Phan (CC BY-SA 4.0), chuyển dịch từ CC-CEDICT. Danh sách HSK 2.0/3.0: <a href="https://github.com/drkameleon/complete-hsk-vocabulary" target="_blank" rel="noopener">complete-hsk-vocabulary</a> (MIT). Đã chỉnh sửa dữ liệu: ghép nghĩa, bỏ nghĩa biến thể.</p>
         <p>Xếp cấp tiếng Anh: tần suất từ <a href="https://github.com/rspeer/wordfreq" target="_blank" rel="noopener">wordfreq</a>. Cấp chỉ để hỗ trợ học, không phải phân loại CEFR chính thức. Bản phái sinh của dữ liệu phát hành theo CC BY-SA 4.0.</p>
       </details>
-      <p class="version">Daily vocab by SirV · v2.0</p>
+      <p class="version">Daily vocab by SirV · v2.1</p>
     </section>
   </main>
 

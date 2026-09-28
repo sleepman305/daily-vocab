@@ -179,6 +179,10 @@ svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-lin
 .btn.sm{min-height:40px;font-size:14px}
 .rate .btn{flex-direction:column;gap:0;min-height:60px}
 .rate .btn small{font-size:12px;font-weight:500;opacity:.8}
+.btn.auto{position:relative;overflow:hidden}
+.btn.auto::after{content:"";position:absolute;left:0;bottom:0;height:4px;width:0;background:currentColor;opacity:.55;animation:autofill var(--auto-dur,3s) linear forwards}
+@keyframes autofill{to{width:100%}}
+.feedback .link-btn{margin:0 0 0 6px;min-height:0;padding:2px 4px;font-size:13px;text-decoration:underline}
 .btn.again{background:var(--bad-soft);color:var(--bad);border-color:transparent}
 .btn.good{background:var(--good-soft);color:var(--good);border-color:transparent}
 

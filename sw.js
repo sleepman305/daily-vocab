@@ -7,7 +7,7 @@
  *   vì tệp lớn và chỉ đổi khi phát hành bản dữ liệu mới — khi đó tăng VERSION.
  * - Yêu cầu ra ngoài (Google Dịch) đi thẳng mạng, không cache ở đây.
  */
-const VERSION = 'dv-2.0.0';
+const VERSION = 'dv-2.1.0';
 const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'data/meta.json',
   'icons/icon-192.png', 'icons/apple-touch-icon.png', 'icons/favicon.png'];
 

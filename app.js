@@ -82,7 +82,7 @@ const DEFAULTS = {
   lang: 'en',
   mode: 'new',
   f: { en: { lv: '1', topic: 'all' }, zh: { lv: '1' } },
-  set: { dur: 15, size: 20, goal: 20, autoSpeak: false, accent: 'en-US', rate: 0.9, theme: 'auto', haptic: true },
+  set: { dur: 15, autoNext: 0, size: 20, goal: 20, autoSpeak: false, accent: 'en-US', rate: 0.9, theme: 'auto', haptic: true },
   srs: {},   // id -> {b: hộp, d: ngày đến hạn, n: số lần ôn, l: số lần quên, v: cấp của từ}
   days: {},  // số ngày -> số lượt chấm trong ngày
   best: 0,   // chuỗi ngày dài nhất
@@ -432,6 +432,8 @@ function renderStudyChrome() {
   $('levelChip').hidden = S.mode === 'review';
   $('topicChipVal').textContent = f.topic && f.topic !== 'all' ? f.topic : 'Tất cả';
   $('timerChipVal').textContent = S.set.dur ? S.set.dur + ' giây' : 'Không giới hạn';
+  $('autoChipVal').textContent = S.set.autoNext ? `Tự chuyển ${S.set.autoNext}s` : 'Tự chuyển: Tắt';
+  $('autoChip').setAttribute('aria-checked', String(!!S.set.autoNext));
   $('answerInput').placeholder = lang === 'zh' ? 'Gõ pinyin hoặc chữ Hán…' : 'Gõ từ tiếng Anh…';
   $('answerInput').setAttribute('aria-label', lang === 'zh' ? 'Nhập pinyin hoặc chữ Hán' : 'Nhập từ tiếng Anh');
   $('streakNum').textContent = streak();
@@ -633,7 +635,7 @@ function drawRing() {
   $('ringText').textContent = timer.paused ? '❚❚' : Math.ceil(Math.max(0, timer.left) / 1000);
 }
 function stopTimer() { clearInterval(timer.id); timer.id = null; }
-function pauseTimer() { if (timer.id) { timer.paused = true; drawRing(); } }
+function pauseTimer() { cancelAutoNext(); if (timer.id) { timer.paused = true; drawRing(); } }
 function resumeTimer() {
   if (timer.id && timer.paused && currentTab === 'study' && $('sheet').hidden) {
     timer.paused = false;
@@ -771,6 +773,40 @@ function reveal(why) {
   }
   requestAnimationFrame(() => $('answer').scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
   if (S.set.autoSpeak) setTimeout(() => { if (revealed) speak(card.t, card.lang, $('speakBtn')); }, 150);
+  scheduleAutoNext(why === 'right');
+}
+
+/* ---------- Tự chuyển từ ---------- */
+let autoNextId = null;
+/**
+ * Hẹn tự chấm và sang từ tiếp sau S.set.autoNext giây (0 = tắt).
+ * Gõ đúng → tự chấm "Đã nhớ"; hết giờ hoặc bấm xem đáp án → "Chưa nhớ"
+ * (không tự nhớ ra được thì cần ôn lại). Nút sẽ được chọn có vạch chạy làm
+ * đồng hồ; bật "Tự đọc" thì cộng thêm 1 giây để kịp nghe hết phát âm.
+ * @param {boolean} good kết quả sẽ tự chấm.
+ */
+function scheduleAutoNext(good) {
+  cancelAutoNext();
+  const sec = Number(S.set.autoNext) || 0;
+  if (!sec || !revealed) return;
+  const ms = sec * 1000 + (S.set.autoSpeak ? 1000 : 0);
+  const btn = good ? $('goodBtn') : $('againBtn');
+  btn.style.setProperty('--auto-dur', ms + 'ms');
+  btn.classList.add('auto');
+  const stop = document.createElement('button');
+  stop.className = 'link-btn';
+  stop.id = 'autoStop';
+  stop.textContent = 'Dừng tự chuyển';
+  stop.onclick = () => { cancelAutoNext(); toast('Đã dừng tự chuyển cho từ này — tự chấm nhé.'); };
+  $('feedback').append(stop);
+  autoNextId = setTimeout(() => { autoNextId = null; rate(good); }, ms);
+}
+function cancelAutoNext() {
+  clearTimeout(autoNextId);
+  autoNextId = null;
+  $('goodBtn').classList.remove('auto');
+  $('againBtn').classList.remove('auto');
+  $('autoStop')?.remove();
 }
 
 /** Hiện câu ví dụ (chỉ tiếng Anh), tô đậm từ đang học. */
@@ -811,6 +847,7 @@ $('speakBtn').onclick = () => { if (card) speak(card.t, card.lang, $('speakBtn')
  */
 function rate(good) {
   if (!card || !revealed) return;
+  cancelAutoNext();
   const gain = typedRight && hints === 0 ? 2 : 1;
   const firstTime = !session.seen.has(card.id);
   grade(card.id, good, gain, card.l);
@@ -891,6 +928,19 @@ $('timerChip').onclick = () => {
     renderSettings();
     if (card && !revealed) startTimer();
   }));
+};
+
+const AUTO_NEXT = [[0, 'Tắt', 'Tự bấm “Đã nhớ / Chưa nhớ” để sang từ'], [2, 'Sau 2 giây'], [3, 'Sau 3 giây'], [5, 'Sau 5 giây'], [8, 'Sau 8 giây']];
+$('autoChip').onclick = () => {
+  openSheet('Tự chuyển sang từ tiếp theo', optionList(
+    AUTO_NEXT.map(([v, label, note]) => ({ v, label, note: note || 'Gõ đúng → Đã nhớ · Không nhớ ra → Chưa nhớ' })),
+    S.set.autoNext, (v) => {
+      S.set.autoNext = Number(v);
+      save();
+      renderStudyChrome();
+      renderSettings();
+      if (card && revealed) scheduleAutoNext(typedRight);
+    }));
 };
 
 /* ---------- Phím tắt (máy tính) ---------- */
@@ -1119,6 +1169,7 @@ function segSetting(id, opts, key, after) {
 }
 function renderSettings() {
   segSetting('setDuration', [[0, 'Tắt'], [10, '10s'], [15, '15s'], [30, '30s']], 'dur', () => { renderStudyChrome(); if (card && !revealed) startTimer(); });
+  segSetting('setAutoNext', [[0, 'Tắt'], [2, '2s'], [3, '3s'], [5, '5s']], 'autoNext', renderStudyChrome);
   segSetting('setSize', [[10, '10'], [20, '20'], [30, '30'], [50, '50']], 'size', () => { studyDirty = true; });
   segSetting('setGoal', [[10, '10'], [20, '20'], [30, '30'], [50, '50']], 'goal');
   segSetting('setAccent', [['en-US', 'Mỹ'], ['en-GB', 'Anh']], 'accent');
