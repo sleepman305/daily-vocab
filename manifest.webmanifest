@@ -1,0 +1,17 @@
+{
+  "name": "Daily vocab by SirV",
+  "short_name": "Daily vocab",
+  "description": "Học từ vựng Anh–Việt và Trung–Việt (HSK) mỗi ngày, chạy offline.",
+  "lang": "vi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e1420",
+  "theme_color": "#0e1420",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
