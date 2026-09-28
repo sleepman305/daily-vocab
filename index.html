@@ -91,6 +91,9 @@
       <!-- Nhập đáp án -->
       <form class="answer-form" id="answerForm" autocomplete="off">
         <input id="answerInput" type="text" inputmode="text" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="Gõ từ tiếng Anh…" aria-label="Nhập đáp án">
+        <button type="button" class="mic" id="micBtn" aria-label="Đọc đáp án bằng giọng nói" aria-pressed="false" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
         <button type="submit" class="submit" id="checkBtn" aria-label="Kiểm tra">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         </button>
@@ -219,7 +222,7 @@
         <p>Nghĩa tiếng Việt từ tiếng Trung: <a href="https://github.com/ph0ngp/CVDICT" target="_blank" rel="noopener">CVDICT</a> của Phong Phan (CC BY-SA 4.0), chuyển dịch từ CC-CEDICT. Danh sách HSK 2.0/3.0: <a href="https://github.com/drkameleon/complete-hsk-vocabulary" target="_blank" rel="noopener">complete-hsk-vocabulary</a> (MIT). Đã chỉnh sửa dữ liệu: ghép nghĩa, bỏ nghĩa biến thể.</p>
         <p>Xếp cấp tiếng Anh: tần suất từ <a href="https://github.com/rspeer/wordfreq" target="_blank" rel="noopener">wordfreq</a>. Cấp chỉ để hỗ trợ học, không phải phân loại CEFR chính thức. Bản phái sinh của dữ liệu phát hành theo CC BY-SA 4.0.</p>
       </details>
-      <p class="version">Daily vocab by SirV · v2.1</p>
+      <p class="version">Daily vocab by SirV · v2.2</p>
     </section>
   </main>
 

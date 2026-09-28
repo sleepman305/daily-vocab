@@ -521,6 +521,7 @@ document.querySelectorAll('.mode-seg button').forEach((b) => { b.onclick = () =>
 /** Hiện thẻ ở vị trí session.i, hoặc tổng kết nếu hết hàng đợi. */
 function showCard() {
   stopTimer();
+  stopMic();
   card = session.queue[session.i];
   if (!card) { showSummary(); return; }
   revealed = false;
@@ -687,7 +688,16 @@ $('answerForm').addEventListener('submit', (e) => {
     fb.className = 'feedback';
     return;
   }
-  const res = judge(v);
+  check(judge(v));
+});
+
+/**
+ * Hiện kết quả chấm lên thẻ.
+ * @param {'right'|'close'|'wrong'} res kết quả của judge().
+ * @param {string} [heard] câu micro nghe được (để báo "nghe thành …" khi sai).
+ */
+function check(res, heard) {
+  const fb = $('feedback');
   if (res === 'right') {
     typedRight = true;
     reveal('right');
@@ -696,7 +706,7 @@ $('answerForm').addEventListener('submit', (e) => {
     fb.className = 'feedback warn';
     haptic(30);
   } else {
-    fb.textContent = 'Chưa đúng. Thử lại, bấm 💡 Gợi ý, hoặc xem đáp án.';
+    fb.textContent = heard ? `Nghe thành “${heard}” — chưa đúng.` : 'Chưa đúng. Thử lại, bấm 💡 Gợi ý, hoặc xem đáp án.';
     fb.className = 'feedback bad';
     const c = $('card');
     c.classList.remove('wrong');
@@ -704,7 +714,134 @@ $('answerForm').addEventListener('submit', (e) => {
     c.classList.add('wrong');
     haptic([20, 40, 20]);
   }
-});
+}
+
+/* ---------- Trả lời bằng giọng nói ---------- */
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+let zhPyMap = null;
+/**
+ * Đổi chuỗi chữ Hán sang pinyin không dấu, dùng kho HSK đã tải: khớp từ dài
+ * nhất trước (tối đa 4 chữ), sau đó từng chữ. Dùng để chấp nhận chữ đồng âm
+ * khi máy nhận diện ra chữ khác cùng cách đọc (vd nói "tā" ra 他 thay vì 她).
+ * @param {string} str chuỗi chữ Hán.
+ * @returns {string} pinyin không dấu viết liền; '' nếu có chữ không tra được.
+ */
+function hanziToPinyin(str) {
+  if (!zhPyMap) {
+    zhPyMap = new Map();
+    for (const w of DB.files.zh || []) if (!zhPyMap.has(w.t)) zhPyMap.set(w.t, normPinyin(w.py));
+  }
+  let out = '', i = 0;
+  const chars = [...str];
+  while (i < chars.length) {
+    let hit = false;
+    for (let n = Math.min(4, chars.length - i); n > 0; n--) {
+      const py = zhPyMap.get(chars.slice(i, i + n).join(''));
+      if (py) { out += py; i += n; hit = true; break; }
+    }
+    if (!hit) return '';
+  }
+  return out;
+}
+/**
+ * Chấm các phương án máy nghe được, lấy phương án tốt nhất.
+ * Tiếng Anh: bỏ dấu câu, chấp nhận khi đáp án nằm trọn trong câu nói
+ * (vd nói "the answer is apple"). Tiếng Trung: khớp chữ Hán, hoặc cùng pinyin.
+ * @param {string[]} alts các phương án nhận diện, tốt nhất đứng trước.
+ * @returns {{res:'right'|'close'|'wrong', text:string}}
+ */
+function judgeSpoken(alts) {
+  let best = { res: 'wrong', text: (alts[0] || '').trim() };
+  for (const raw of alts) {
+    const t = raw.replace(/[。，！？、.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!t) continue;
+    let res = judge(t);
+    if (res !== 'right' && card.lang === 'zh') {
+      const hz = t.replace(/\s/g, '');
+      if (hz.includes(card.t)) res = 'right';
+      else if (/[\u3400-\u9fff]/.test(hz) && hanziToPinyin(hz) === normPinyin(card.py)) res = 'right';
+    }
+    if (res !== 'right' && card.lang === 'en') {
+      const said = ' ' + normEn(t).replace(/-/g, ' ') + ' ', want = ' ' + normEn(card.t).replace(/-/g, ' ') + ' ';
+      if (said.includes(want)) res = 'right';
+    }
+    if (res === 'right') return { res, text: t };
+    if (res === 'close' && best.res === 'wrong') best = { res, text: t };
+  }
+  return best;
+}
+function micError(code) {
+  const msg = {
+    'not-allowed': 'Chưa được dùng micro. iPhone: Cài đặt › Safari › Micro › Cho phép.',
+    'service-not-allowed': 'Máy chặn nhận diện giọng nói ở chế độ này. Thử mở link bằng Safari/Chrome.',
+    'no-speech': 'Không nghe thấy gì — bấm micro rồi đọc to, rõ nhé.',
+    'audio-capture': 'Không tìm thấy micro trên máy.',
+    network: 'Nhận diện giọng nói cần có mạng.',
+    'language-not-supported': 'Máy chưa hỗ trợ nhận diện ngôn ngữ này.',
+  }[code];
+  if (msg) toast(msg, 4000);
+}
+function stopMic() {
+  const r = rec;
+  rec = null;
+  try { r?.abort(); } catch (e) { /* đã dừng */ }
+  $('micBtn').classList.remove('on');
+  $('micBtn').setAttribute('aria-pressed', 'false');
+  $('answerInput').classList.remove('listening');
+  if (card) $('answerInput').placeholder = card.lang === 'zh' ? 'Gõ pinyin hoặc chữ Hán…' : 'Gõ từ tiếng Anh…';
+}
+/**
+ * Bật micro, nghe một lần: chữ tạm hiện dần trong ô trả lời, nghe xong tự chấm.
+ * Bấm lần nữa khi đang nghe thì huỷ. Đồng hồ đoán tạm dừng trong lúc nghe để
+ * không bị mất giờ vì chờ máy nhận diện.
+ * Hỗ trợ: Safari iOS 14.5+, Chrome Android/máy tính (cần mạng).
+ */
+function startMic() {
+  if (!Recognition || !card || revealed) return;
+  if (rec) { stopMic(); resumeTimer(); return; }
+  const shown = card;
+  const r = new Recognition();
+  r.lang = card.lang === 'zh' ? 'zh-CN' : S.set.accent;
+  r.interimResults = true;
+  r.maxAlternatives = 5;
+  r.continuous = false;
+  let finalAlts = null;
+  r.onresult = (e) => {
+    const res = e.results[e.results.length - 1];
+    $('answerInput').value = res[0].transcript.trim();
+    if (res.isFinal) finalAlts = [...res].map((a) => a.transcript);
+  };
+  r.onerror = (e) => { if (e.error !== 'aborted') micError(e.error); };
+  r.onend = () => {
+    if (rec !== r) return;          // đã huỷ hoặc đã sang thẻ khác
+    stopMic();
+    if (card !== shown || revealed) return;
+    resumeTimer();
+    const alts = finalAlts || ($('answerInput').value ? [$('answerInput').value] : []);
+    if (!alts.length) { $('feedback').textContent = ''; return; }
+    const { res, text } = judgeSpoken(alts);
+    $('answerInput').value = text;
+    check(res, text);
+  };
+  try {
+    r.start();
+  } catch (e) {
+    toast('Không bật được micro — thử lại.');
+    return;
+  }
+  rec = r;
+  pauseTimer();
+  $('answerInput').value = '';
+  $('answerInput').classList.add('listening');
+  $('answerInput').placeholder = 'Đang nghe…';
+  $('micBtn').classList.add('on');
+  $('micBtn').setAttribute('aria-pressed', 'true');
+  $('feedback').textContent = '🎙 Đọc đáp án — app tự kiểm tra.';
+  $('feedback').className = 'feedback';
+}
+$('micBtn').hidden = !Recognition;
+$('micBtn').onclick = startMic;
 
 $('hintBtn').onclick = () => {
   if (!card || revealed) return;
@@ -732,6 +869,7 @@ $('skipBtn').onclick = () => {
 function reveal(why) {
   if (!card || revealed) return;
   stopTimer();
+  stopMic();
   revealed = true;
   const zh = card.lang === 'zh';
   $('tiles').hidden = true;

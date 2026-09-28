@@ -160,6 +160,12 @@ svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-lin
   padding:0 16px;font-size:17px}
 .answer-form input:focus{outline:none;border-color:var(--accent)}
 .answer-form input::placeholder{color:var(--ink-3)}
+.mic{width:52px;height:52px;border-radius:14px;background:var(--surface);border:1.5px solid var(--line);display:grid;place-items:center;flex:none;position:relative}
+.mic svg{width:22px;height:22px}
+.mic.on{background:var(--bad);border-color:transparent;color:#fff}
+.mic.on::before{content:"";position:absolute;inset:-5px;border-radius:18px;border:2px solid var(--bad);animation:micwave 1.2s ease-out infinite}
+@keyframes micwave{from{opacity:.9;transform:scale(.92)}to{opacity:0;transform:scale(1.15)}}
+.answer-form input.listening{border-color:var(--bad)}
 .submit{width:52px;height:52px;border-radius:14px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;flex:none}
 .submit svg{width:22px;height:22px;stroke-width:2.5}
 .feedback{min-height:22px;font-size:14px;font-weight:600;margin:4px 2px 6px;color:var(--ink-2);text-align:center}
