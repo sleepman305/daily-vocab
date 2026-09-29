@@ -9,7 +9,9 @@ App học từ vựng **Anh–Việt** và **Trung–Việt (HSK 1–9)** mỗi 
 - Lặp lại ngắt quãng (hộp Leitner): "Chưa nhớ" ôn lại ngay trong lượt, "Đã nhớ" giãn lịch 1 → 3 → 7 → 14 → 30… ngày.
 - 85.523 từ tiếng Anh xếp 4 cấp theo tần suất thực tế; 11.384 từ HSK 3.0 kèm pinyin và nghĩa tiếng Việt, **có sẵn trong app, không cần máy dịch**.
 - Kho từ tìm không dấu, mục tiêu mỗi ngày, chuỗi ngày học, biểu đồ 7 ngày, sao lưu/khôi phục tiến độ.
-- Chủ đề sáng/tối, phát âm bằng giọng đọc của máy.
+- **Tiếng Anh chuyên ngành Hải quan**: 308 thuật ngữ / 12 chủ đề (thủ tục, trị giá, phân loại HS, xuất xứ, KTSTQ, chống buôn lậu, Incoterms…), mỗi từ có câu ví dụ và bản dịch. Thuật ngữ theo WCO Glossary of International Customs Terms; nghĩa tiếng Việt theo Luật Hải quan 54/2014 và văn bản hướng dẫn.
+- Giọng AI tự nhiên (Kokoro-82M, Apache-2.0) 4 giọng Anh + 2 giọng Trung, tạo sẵn cho từ Cơ bản, mục Hải quan và HSK 1–3; có thể chọn cả giọng có sẵn trên máy.
+- Trả lời bằng micro, tự chuyển từ, chủ đề sáng/tối.
 
 ## Cài lên điện thoại
 - iPhone: mở link bằng **Safari** → nút Chia sẻ → **Thêm vào MH chính**.
@@ -17,8 +19,9 @@ App học từ vựng **Anh–Việt** và **Trung–Việt (HSK 1–9)** mỗi 
 
 ## Dựng lại dữ liệu
 ```
-pip install wordfreq
+pip install wordfreq kokoro-onnx soundfile "misaki[zh]"
 python tools/build_data.py <Tu_vung_moi_ngay_100000.html> <complete.min.json> <CVDICT.u8>
+python tools/gen_audio.py <thư mục chứa kokoro-v1.0.onnx, voices-v1.0.bin> [số tiến trình]
 ```
 
 ## Giấy phép
@@ -28,4 +31,5 @@ python tools/build_data.py <Tu_vung_moi_ngay_100000.html> <complete.min.json> <C
   - CVDICT của Phong Phan (CC BY-SA 4.0), chuyển dịch từ CC-CEDICT.
   - complete-hsk-vocabulary của Yanis Zafirópulos (MIT).
   - Xếp cấp theo tần suất từ wordfreq (MIT).
+  - Âm thanh giọng AI tạo bằng mô hình Kokoro-82M (hexgrad, Apache-2.0).
   - Đã chỉnh sửa dữ liệu: chọn nghĩa, bỏ mục tham chiếu/biến thể ngữ pháp, ghép nghĩa tiếng Việt cho từ HSK, xếp cấp.

@@ -42,9 +42,11 @@
       </div>
 
       <div class="chips scroll" id="filterChips">
+        <button class="chip" id="hqChip" role="switch" aria-checked="false">🛃 Hải quan</button>
         <button class="chip" id="levelChip" aria-haspopup="dialog"><span class="chip-k">Cấp</span> <span id="levelChipVal">Cơ bản</span> <i class="caret"></i></button>
         <button class="chip" id="topicChip" aria-haspopup="dialog"><span class="chip-k">Chủ đề</span> <span id="topicChipVal">Tất cả</span> <i class="caret"></i></button>
         <button class="chip" id="timerChip" aria-haspopup="dialog">⏱ <span id="timerChipVal">15 giây</span></button>
+        <button class="chip" id="voiceChip" aria-haspopup="dialog">🗣 <span id="voiceChipVal">Heart</span></button>
         <button class="chip" id="autoChip" aria-haspopup="dialog">⏭ <span id="autoChipVal">Tự chuyển: Tắt</span></button>
       </div>
 
@@ -81,7 +83,10 @@
             <div class="example" id="example" hidden>
               <p class="ex-en" id="exEn"></p>
               <p class="ex-vi" id="exVi" hidden></p>
-              <button class="link-btn" id="exTranslate">Dịch câu ví dụ</button>
+              <div class="ex-actions">
+                <button class="link-btn" id="exSpeak">🔊 Nghe câu</button>
+                <button class="link-btn" id="exTranslate">Dịch câu ví dụ</button>
+              </div>
             </div>
           </div>
         </div>
@@ -193,9 +198,11 @@
       <div class="group">
         <h3 class="group-title">Phát âm</h3>
         <label class="row switch"><span>Tự đọc khi mở đáp án</span><input type="checkbox" id="setAutoSpeak"><i></i></label>
-        <div class="row"><span>Giọng tiếng Anh</span><div class="seg sm" id="setAccent"></div></div>
+        <button class="row link" id="voiceEnBtn"><span>Giọng tiếng Anh</span><span class="row-val" id="voiceEnVal">Heart ›</span></button>
+        <button class="row link" id="voiceZhBtn"><span>Giọng tiếng Trung</span><span class="row-val" id="voiceZhVal">Xiaoxiao ›</span></button>
         <div class="row"><span>Tốc độ đọc</span><div class="seg sm" id="setRate"></div></div>
         <button class="row link" id="testVoice"><span>Nghe thử giọng</span><span aria-hidden="true">🔊</span></button>
+        <p class="group-note">Giọng <b>AI tự nhiên</b> có sẵn cho từ cấp Cơ bản, mục Hải quan (cả câu ví dụ) và HSK 1–3, dùng được cả khi không có mạng. Từ khác tự chuyển sang giọng của máy.</p>
       </div>
       <div class="group">
         <h3 class="group-title">Giao diện</h3>
@@ -221,8 +228,10 @@
         <p>WordNet 3.1 Copyright 2011 The Trustees of Princeton University. All rights reserved.</p>
         <p>Nghĩa tiếng Việt từ tiếng Trung: <a href="https://github.com/ph0ngp/CVDICT" target="_blank" rel="noopener">CVDICT</a> của Phong Phan (CC BY-SA 4.0), chuyển dịch từ CC-CEDICT. Danh sách HSK 2.0/3.0: <a href="https://github.com/drkameleon/complete-hsk-vocabulary" target="_blank" rel="noopener">complete-hsk-vocabulary</a> (MIT). Đã chỉnh sửa dữ liệu: ghép nghĩa, bỏ nghĩa biến thể.</p>
         <p>Xếp cấp tiếng Anh: tần suất từ <a href="https://github.com/rspeer/wordfreq" target="_blank" rel="noopener">wordfreq</a>. Cấp chỉ để hỗ trợ học, không phải phân loại CEFR chính thức. Bản phái sinh của dữ liệu phát hành theo CC BY-SA 4.0.</p>
+        <p>Mục Tiếng Anh chuyên ngành Hải quan: thuật ngữ theo <a href="https://www.wcoomd.org/en/topics/facilitation/instrument-and-tools/tools/glossary-of-international-customs-terms.aspx" target="_blank" rel="noopener">WCO Glossary of International Customs Terms</a>, Công ước Kyoto sửa đổi, Hiệp định Trị giá WTO, Incoterms® 2020; nghĩa tiếng Việt theo Luật Hải quan 54/2014/QH13 và văn bản hướng dẫn. Câu ví dụ do Daily vocab biên soạn.</p>
+        <p>Giọng AI: âm thanh tạo sẵn bằng mô hình <a href="https://huggingface.co/hexgrad/Kokoro-82M" target="_blank" rel="noopener">Kokoro-82M</a> (Apache-2.0).</p>
       </details>
-      <p class="version">Daily vocab by SirV · v2.2</p>
+      <p class="version">Daily vocab by SirV · v2.3</p>
     </section>
   </main>
 

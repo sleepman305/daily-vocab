@@ -147,6 +147,14 @@ svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-lin
 .ex-en{font-size:15px}
 .ex-en mark{background:none;color:inherit;font-weight:750;text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:2px;text-underline-offset:3px}
 .ex-vi{font-size:14px;color:var(--ink-2);margin-top:6px}
+.ex-actions{display:flex;gap:16px;flex-wrap:wrap}
+.row-val{color:var(--ink-3);font-weight:500;margin-left:auto}
+.voice-group{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);padding:12px 12px 4px;font-weight:600}
+.voice-row{display:flex;align-items:center;gap:6px}
+.voice-row .opt{flex:1}
+.voice-row .icon-btn{width:40px;height:40px}
+.voice-tip{font-size:13px;color:var(--ink-2);padding:10px 12px 4px}
+.badge-ai{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--good-soft);color:var(--good);margin-left:6px;vertical-align:1px}
 .link-btn{margin-top:6px;font-size:13px;font-weight:600;color:var(--info);min-height:32px}
 
 .card-flash{position:absolute;inset:0;pointer-events:none;opacity:0;border-radius:inherit}

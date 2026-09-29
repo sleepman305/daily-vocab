@@ -23,11 +23,11 @@ const INTERVALS = [0, 1, 3, 7, 14, 30, 60, 120];
 const KNOWN_BOX = 3;
 
 const LEVELS = {
-  en: { 1: 'Cơ bản', 2: 'Thông dụng', 3: 'Nâng cao', 4: 'Chuyên sâu' },
+  en: { 1: 'Cơ bản', 2: 'Thông dụng', 3: 'Nâng cao', 4: 'Chuyên sâu', 5: 'Hải quan' },
   zh: { 1: 'HSK 1', 2: 'HSK 2', 3: 'HSK 3', 4: 'HSK 4', 5: 'HSK 5', 6: 'HSK 6', 7: 'HSK 7–9' },
 };
 const LEVEL_NOTE = {
-  en: { 1: '~2.300 từ hay gặp nhất', 2: 'Giao tiếp, đọc báo', 3: 'Học thuật, chuyên môn', 4: 'Hiếm gặp, thuật ngữ' },
+  en: { 1: '~2.300 từ hay gặp nhất', 2: 'Giao tiếp, đọc báo', 3: 'Học thuật, chuyên môn', 4: 'Hiếm gặp, thuật ngữ', 5: 'Tiếng Anh chuyên ngành Hải quan (WCO, Luật HQ)' },
   zh: {},
 };
 /** Nhãn từ loại tiếng Trung theo mã gắn thẻ ICTCLAS/jieba dùng trong complete-hsk-vocabulary. */
@@ -81,8 +81,8 @@ const DEFAULTS = {
   v: 1,
   lang: 'en',
   mode: 'new',
-  f: { en: { lv: '1', topic: 'all' }, zh: { lv: '1' } },
-  set: { dur: 15, autoNext: 0, size: 20, goal: 20, autoSpeak: false, accent: 'en-US', rate: 0.9, theme: 'auto', haptic: true },
+  f: { en: { lv: '1', topic: 'all', hqTopic: 'all' }, zh: { lv: '1' } },
+  set: { dur: 15, autoNext: 0, size: 20, goal: 20, autoSpeak: false, accent: 'en-US', voiceEn: 'ai:af_heart', voiceZh: 'ai:zf_xiaoxiao', rate: 0.9, theme: 'auto', haptic: true },
   srs: {},   // id -> {b: hộp, d: ngày đến hạn, n: số lần ôn, l: số lần quên, v: cấp của từ}
   days: {},  // số ngày -> số lượt chấm trong ngày
   best: 0,   // chuỗi ngày dài nhất
@@ -132,7 +132,7 @@ async function loadFile(name) {
   const raw = await r.json();
   let items;
   if (name.startsWith('en-')) {
-    items = raw.map(([t, m, p, ipa, ex, l, c]) => ({ id: 'e:' + t, lang: 'en', t, m, p, ipa, ex, l, c }));
+    items = raw.map(([t, m, p, ipa, ex, l, c, xv]) => ({ id: 'e:' + t, lang: 'en', t, m, p, ipa, ex, l, c, xv }));
   } else {
     items = raw.map(([t, py, m, g, l, p]) => ({ id: 'z:' + t, lang: 'zh', t, py, m, g, l, p: ZH_POS[p] || '' }));
   }
@@ -150,7 +150,7 @@ async function loadMeta() {
 /** Danh sách tệp cần cho một ngôn ngữ và bộ lọc cấp ('all' = mọi cấp). */
 function filesFor(lang, lv) {
   if (lang === 'zh') return ['zh'];
-  return lv === 'all' ? ['en-1', 'en-2', 'en-3', 'en-4'] : ['en-' + lv];
+  return lv === 'all' ? ['en-1', 'en-2', 'en-3', 'en-4', 'en-5'] : ['en-' + lv];
 }
 async function loadItems(lang, lv) {
   const parts = await Promise.all(filesFor(lang, lv).map(loadFile));
@@ -223,6 +223,45 @@ function daysText(n) { return n <= 0 ? 'hôm nay' : n === 1 ? '1 ngày' : n < 30
 
 /* ======================= Phát âm ======================= */
 
+/**
+ * Giọng AI tự nhiên: âm thanh tạo sẵn bằng Kokoro-82M (Apache-2.0), xem
+ * tools/gen_audio.py. Phạm vi có âm thanh phải khớp hàm jobs() ở đó.
+ */
+const AI_VOICES = {
+  en: [
+    { id: 'ai:af_heart', name: 'Heart', note: 'Anh–Mỹ · nữ', lang: 'en-US' },
+    { id: 'ai:am_michael', name: 'Michael', note: 'Anh–Mỹ · nam', lang: 'en-US' },
+    { id: 'ai:bf_emma', name: 'Emma', note: 'Anh–Anh · nữ', lang: 'en-GB' },
+    { id: 'ai:bm_george', name: 'George', note: 'Anh–Anh · nam', lang: 'en-GB' },
+  ],
+  zh: [
+    { id: 'ai:zf_xiaoxiao', name: 'Xiaoxiao', note: 'Phổ thông · nữ', lang: 'zh-CN' },
+    { id: 'ai:zm_yunxi', name: 'Yunxi', note: 'Phổ thông · nam', lang: 'zh-CN' },
+  ],
+};
+/** Tốc độ đã dùng khi tạo âm thanh AI; tốc độ phát = tốc độ chọn / hằng số này. */
+const AI_BASE_RATE = 0.9;
+
+/**
+ * Băm FNV-1a 32 bit trên UTF-8 — tên tệp âm thanh AI (khớp fnv1a() trong tools/gen_audio.py).
+ * @param {string} text chuỗi cần đọc.
+ * @returns {string} 8 ký tự hex.
+ */
+function audioKey(text) {
+  let h = 0x811c9dc5;
+  for (const b of new TextEncoder().encode(text)) {
+    h ^= b;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+/** Mục từ này (từ hoặc câu ví dụ) có âm thanh AI tạo sẵn không. */
+function aiCovered(item, kind) {
+  if (!item) return false;
+  if (item.lang === 'zh') return kind === 'word' && item.l <= 3;
+  return kind === 'word' ? item.l === 1 || item.l === 5 : item.l === 5;
+}
+
 let voices = [];
 function refreshVoices() { try { voices = speechSynthesis.getVoices(); } catch (e) { voices = []; } }
 if ('speechSynthesis' in window) {
@@ -230,28 +269,176 @@ if ('speechSynthesis' in window) {
   speechSynthesis.onvoiceschanged = refreshVoices;
 }
 /**
- * Đọc to một chuỗi bằng Web Speech API.
- * @param {string} text nội dung đọc.
- * @param {'en'|'zh'} lang ngôn ngữ; tiếng Anh dùng giọng Mỹ/Anh theo cài đặt.
- * @param {HTMLElement} [btn] nút phát để hiện hiệu ứng đang đọc.
+ * Chấm điểm giọng của máy: giọng "Premium/Enhanced/Neural/Natural" (iOS, Edge)
+ * và giọng mạng của Google nghe tự nhiên hơn giọng mặc định nhiều.
  */
-function speak(text, lang, btn) {
+function voiceScore(v) {
+  let s = 0;
+  if (/premium|cao cấp/i.test(v.name)) s += 5;
+  if (/enhanced|nâng cao|neural|natural|online/i.test(v.name)) s += 4;
+  if (/google/i.test(v.name)) s += 3;
+  if (!v.localService) s += 1;
+  if (/compact|eloquence|espeak/i.test(v.name)) s -= 3;
+  return s;
+}
+/** Giọng của máy cho một ngôn ngữ, tốt nhất trước. */
+function systemVoices(lang) {
+  if (!voices.length) refreshVoices();
+  const pre = lang === 'zh' ? 'zh' : 'en';
+  return voices
+    .filter((v) => v.lang.toLowerCase().replace('_', '-').startsWith(pre) && (pre !== 'zh' || /cn|hans/i.test(v.lang) || v.lang === 'zh'))
+    .sort((a, b) => voiceScore(b) - voiceScore(a) || a.name.localeCompare(b.name));
+}
+function voiceSetting(lang) { return lang === 'zh' ? S.set.voiceZh : S.set.voiceEn; }
+/** Mã ngôn ngữ (en-US/en-GB/zh-CN) của giọng đang chọn — cũng dùng cho micro. */
+function voiceLang(lang) {
+  if (lang === 'zh') return 'zh-CN';
+  const id = S.set.voiceEn || '';
+  const ai = AI_VOICES.en.find((v) => v.id === id);
+  if (ai) return ai.lang;
+  const sys = voices.find((v) => 'sys:' + v.voiceURI === id);
+  return sys ? sys.lang.replace('_', '-') : (S.set.accent || 'en-US');
+}
+function voiceLabel(lang) {
+  const id = voiceSetting(lang) || '';
+  const ai = AI_VOICES[lang].find((v) => v.id === id);
+  if (ai) return ai.name;
+  const sys = voices.find((v) => 'sys:' + v.voiceURI === id);
+  return sys ? sys.name.replace(/\s*\(.*\)$/, '') : 'Giọng máy';
+}
+
+const player = new Audio();
+player.preload = 'auto';
+let playingBtn = null;
+function markPlaying(btn) {
+  playingBtn?.classList.remove('playing');
+  playingBtn = btn || null;
+  playingBtn?.classList.add('playing');
+}
+player.onended = () => markPlaying(null);
+
+/**
+ * Đọc bằng giọng của máy (Web Speech API).
+ * @param {string} text nội dung.
+ * @param {'en'|'zh'} lang ngôn ngữ.
+ * @param {HTMLElement} [btn] nút hiện hiệu ứng đang đọc.
+ * @param {string} [voiceId] 'sys:<voiceURI>' để ép một giọng; bỏ trống = giọng tốt nhất đúng giọng vùng.
+ */
+function speakSystem(text, lang, btn, voiceId) {
   if (!('speechSynthesis' in window)) { toast('Trình duyệt này không hỗ trợ đọc từ.'); return; }
-  const code = lang === 'zh' ? 'zh-CN' : S.set.accent;
+  const code = voiceLang(lang);
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = code;
   u.rate = Number(S.set.rate) || 0.9;
-  if (!voices.length) refreshVoices();
-  const v = voices.find((x) => x.lang.replace('_', '-') === code) ||
-    voices.find((x) => x.lang.toLowerCase().startsWith(code.slice(0, 2)));
+  const list = systemVoices(lang);
+  const v = list.find((x) => 'sys:' + x.voiceURI === voiceId) ||
+    list.find((x) => x.lang.replace('_', '-') === code) || list[0];
   if (v) u.voice = v;
   else if (voices.length && lang === 'zh') toast('Máy chưa có giọng tiếng Trung. iPhone: Cài đặt › Trợ năng › Nội dung được đọc › Giọng nói.');
-  if (btn) {
-    btn.classList.add('playing');
-    u.onend = u.onerror = () => btn.classList.remove('playing');
-  }
+  markPlaying(btn);
+  u.onend = u.onerror = () => markPlaying(null);
   speechSynthesis.speak(u);
+}
+/**
+ * Phát âm thanh AI tạo sẵn; lỗi (chưa có tệp, mất mạng lần đầu) thì chuyển sang giọng máy.
+ * @param {string} voiceId 'ai:<tên giọng>'.
+ */
+function playAi(voiceId, text, lang, btn) {
+  try { speechSynthesis.cancel(); } catch (e) { /* không có TTS */ }
+  // Lỗi tải tệp báo cả qua onerror lẫn play() bị từ chối — chỉ rơi về giọng máy một lần,
+  // và bỏ qua nếu người dùng đã bấm phát câu khác.
+  const src = `audio/${voiceId.slice(3)}/${audioKey(text)}.mp3`;
+  let done = false;
+  const fallback = () => {
+    if (done || !player.src.endsWith(src)) return;
+    done = true;
+    speakSystem(text, lang, btn);
+  };
+  player.onerror = fallback;
+  player.src = src;
+  player.playbackRate = (Number(S.set.rate) || AI_BASE_RATE) / AI_BASE_RATE;
+  markPlaying(btn);
+  const p = player.play();
+  if (p) p.catch((e) => { if (e.name !== 'AbortError') fallback(); });
+}
+/**
+ * Đọc một mục từ (hoặc câu ví dụ của nó) bằng giọng đã chọn.
+ * Giọng AI chỉ có cho phạm vi aiCovered(); ngoài phạm vi dùng giọng máy cùng giọng vùng.
+ * @param {object} item mục từ.
+ * @param {HTMLElement} [btn] nút phát.
+ * @param {'word'|'ex'} [kind] đọc từ hay câu ví dụ.
+ */
+function speakItem(item, btn, kind = 'word') {
+  if (!item) return;
+  const text = kind === 'ex' ? item.ex : item.t;
+  const id = voiceSetting(item.lang) || '';
+  if (id.startsWith('ai:') && aiCovered(item, kind)) playAi(id, text, item.lang, btn);
+  else speakSystem(text, item.lang, btn, id.startsWith('sys:') ? id : undefined);
+}
+/** Giữ tên hàm cũ cho các chỗ chỉ có chuỗi (không có mục từ): dùng giọng máy. */
+function speak(text, lang, btn) { speakSystem(text, lang, btn, (voiceSetting(lang) || '').startsWith('sys:') ? voiceSetting(lang) : undefined); }
+
+/** Bảng chọn giọng: giọng AI trước, rồi giọng có sẵn trên máy, mỗi dòng có nút nghe thử. */
+function openVoiceSheet(lang) {
+  const wrap = document.createElement('div');
+  const cur = voiceSetting(lang);
+  const sample = lang === 'zh'
+    ? { lang: 'zh', t: '你好', l: 1, ex: '' }
+    : { lang: 'en', t: 'customs clearance', l: 5, ex: 'The declarant is responsible for the accuracy of the declaration.' };
+  const addRow = (id, label, note, isAi) => {
+    const row = document.createElement('div');
+    row.className = 'voice-row';
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(id === cur));
+    b.innerHTML = `<span>${esc(label)}${isAi ? '<span class="badge-ai">AI</span>' : ''}<br><small>${esc(note)}</small></span>`;
+    b.onclick = () => {
+      if (lang === 'zh') S.set.voiceZh = id; else S.set.voiceEn = id;
+      if (lang === 'en') S.set.accent = voiceLang('en');
+      save();
+      renderVoiceLabels();
+      closeSheet();
+      toast('Đã chọn giọng ' + label);
+    };
+    const play = document.createElement('button');
+    play.className = 'icon-btn';
+    play.setAttribute('aria-label', 'Nghe thử ' + label);
+    play.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+    play.onclick = () => {
+      if (isAi) playAi(id, lang === 'zh' ? sample.t : sample.ex, lang, play);
+      else speakSystem(lang === 'zh' ? sample.t : sample.ex, lang, play, id);
+    };
+    row.append(b, play);
+    wrap.append(row);
+  };
+  const h1 = document.createElement('p');
+  h1.className = 'voice-group';
+  h1.textContent = 'Giọng AI tự nhiên (khuyên dùng)';
+  wrap.append(h1);
+  for (const v of AI_VOICES[lang]) addRow(v.id, v.name, v.note, true);
+  const sys = systemVoices(lang);
+  if (sys.length) {
+    const h2 = document.createElement('p');
+    h2.className = 'voice-group';
+    h2.textContent = 'Giọng có sẵn trên máy (dùng cho mọi từ)';
+    wrap.append(h2);
+    for (const v of sys.slice(0, 20)) {
+      const q = voiceScore(v) >= 4 ? 'chất lượng cao' : voiceScore(v) >= 3 ? 'giọng mạng' : 'cơ bản';
+      addRow('sys:' + v.voiceURI, v.name, `${v.lang} · ${q}`, false);
+    }
+  }
+  const tip = document.createElement('p');
+  tip.className = 'voice-tip';
+  tip.innerHTML = 'Giọng AI có cho từ Cơ bản, mục Hải quan và HSK 1–3; từ khác dùng giọng máy.<br>Muốn giọng máy hay hơn trên iPhone: <b>Cài đặt › Trợ năng › Nội dung được đọc › Giọng nói</b> › chọn ngôn ngữ › tải giọng <b>Nâng cao</b> hoặc <b>Cao cấp</b>.';
+  wrap.append(tip);
+  openSheet(lang === 'zh' ? 'Giọng đọc tiếng Trung' : 'Giọng đọc tiếng Anh', wrap);
+}
+function renderVoiceLabels() {
+  $('voiceEnVal').textContent = voiceLabel('en') + ' ›';
+  $('voiceZhVal').textContent = voiceLabel('zh') + ' ›';
+  $('voiceChipVal').textContent = voiceLabel(S.lang);
 }
 
 /* ======================= Dịch câu ví dụ ======================= */
@@ -430,7 +617,12 @@ function renderStudyChrome() {
   $('levelChipVal').textContent = f.lv === 'all' ? 'Tất cả' : LEVELS[lang][f.lv];
   $('topicChip').hidden = lang !== 'en' || S.mode === 'review';
   $('levelChip').hidden = S.mode === 'review';
-  $('topicChipVal').textContent = f.topic && f.topic !== 'all' ? f.topic : 'Tất cả';
+  const isHq = lang === 'en' && String(f.lv) === '5';
+  const tp = isHq ? f.hqTopic : f.topic;
+  $('topicChipVal').textContent = tp && tp !== 'all' ? tp : 'Tất cả';
+  $('hqChip').hidden = lang !== 'en' || S.mode === 'review';
+  $('hqChip').setAttribute('aria-checked', String(isHq));
+  $('voiceChipVal').textContent = voiceLabel(lang);
   $('timerChipVal').textContent = S.set.dur ? S.set.dur + ' giây' : 'Không giới hạn';
   $('autoChipVal').textContent = S.set.autoNext ? `Tự chuyển ${S.set.autoNext}s` : 'Tự chuyển: Tắt';
   $('autoChip').setAttribute('aria-checked', String(!!S.set.autoNext));
@@ -475,12 +667,12 @@ async function startSession() {
     if (S.mode === 'review') {
       queue = await itemsByIds(dueIds(lang).slice(0, size));
     } else {
-      $('loadingText').textContent = (f.lv === 'all' || (lang === 'en' && f.topic !== 'all')) ? 'Đang tải toàn bộ kho từ (lần đầu hơi lâu)…' : 'Đang tải kho từ…';
-      const lvForLoad = lang === 'en' && f.topic !== 'all' ? 'all' : f.lv;
-      let items = await loadItems(lang, lvForLoad);
-      if (lang === 'en' && f.topic !== 'all') {
-        items = items.filter((w) => w.c === f.topic && (f.lv === 'all' || String(w.l) === String(f.lv)));
-      }
+      const isHq = lang === 'en' && String(f.lv) === '5';
+      const genTopic = lang === 'en' && !isHq && f.topic !== 'all';
+      $('loadingText').textContent = (f.lv === 'all' || genTopic) ? 'Đang tải toàn bộ kho từ (lần đầu hơi lâu)…' : 'Đang tải kho từ…';
+      let items = await loadItems(lang, genTopic ? 'all' : f.lv);
+      if (genTopic) items = items.filter((w) => w.c === f.topic && (f.lv === 'all' || String(w.l) === String(f.lv)));
+      if (isHq && f.hqTopic !== 'all') items = items.filter((w) => w.c === f.hqTopic);
       const fresh = items.filter((w) => !S.srs[w.id]);
       queue = shuffle(fresh.slice(0, size * 5)).slice(0, size);
     }
@@ -802,7 +994,7 @@ function startMic() {
   if (rec) { stopMic(); resumeTimer(); return; }
   const shown = card;
   const r = new Recognition();
-  r.lang = card.lang === 'zh' ? 'zh-CN' : S.set.accent;
+  r.lang = voiceLang(card.lang);
   r.interimResults = true;
   r.maxAlternatives = 5;
   r.continuous = false;
@@ -910,7 +1102,7 @@ function reveal(why) {
     fb.className = 'feedback';
   }
   requestAnimationFrame(() => $('answer').scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
-  if (S.set.autoSpeak) setTimeout(() => { if (revealed) speak(card.t, card.lang, $('speakBtn')); }, 150);
+  if (S.set.autoSpeak) setTimeout(() => { if (revealed) speakItem(card, $('speakBtn')); }, 150);
   scheduleAutoNext(why === 'right');
 }
 
@@ -954,7 +1146,7 @@ function renderExample() {
   if (!ex) return;
   const re = new RegExp(`(${card.t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\w*)`, 'i');
   $('exEn').innerHTML = esc(ex).replace(re, '<mark>$1</mark>');
-  const cached = trCache[ex];
+  const cached = card.xv || trCache[ex];
   $('exVi').hidden = !cached;
   $('exVi').textContent = cached || '';
   $('exTranslate').hidden = !!cached;
@@ -976,7 +1168,8 @@ $('exTranslate').onclick = async () => {
     btn.textContent = 'Không dịch được (cần mạng) — thử lại';
   }
 };
-$('speakBtn').onclick = () => { if (card) speak(card.t, card.lang, $('speakBtn')); };
+$('speakBtn').onclick = () => speakItem(card, $('speakBtn'));
+$('exSpeak').onclick = () => speakItem(card, $('exSpeak'), 'ex');
 
 /**
  * Tự chấm sau khi mở đáp án.
@@ -1049,6 +1242,16 @@ function openLevelSheet() {
 $('levelChip').onclick = openLevelSheet;
 $('topicChip').onclick = async () => {
   const meta = await loadMeta();
+  if (String(S.f.en.lv) === '5') {
+    const opts = [{ v: 'all', label: 'Tất cả chủ đề Hải quan', note: `${meta.en.levels[5]} thuật ngữ` }]
+      .concat(meta.en.hqTopics.map((t) => ({ v: t, label: t })));
+    openSheet('Chủ đề Hải quan', optionList(opts, S.f.en.hqTopic, (v) => {
+      S.f.en.hqTopic = v;
+      save();
+      startSession();
+    }));
+    return;
+  }
   const opts = [{ v: 'all', label: 'Tất cả chủ đề' }].concat(meta.en.topics.map((t) => ({ v: t, label: t })));
   openSheet('Chọn chủ đề', optionList(opts, S.f.en.topic, (v) => {
     S.f.en.topic = v;
@@ -1057,6 +1260,17 @@ $('topicChip').onclick = async () => {
     startSession();
   }));
 };
+/* Công tắc nhanh vào mục Tiếng Anh chuyên ngành Hải quan; bấm lại để về cấp trước đó. */
+$('hqChip').onclick = () => {
+  const f = S.f.en;
+  if (String(f.lv) === '5') f.lv = f.prevLv || '1';
+  else { f.prevLv = f.lv; f.lv = '5'; }
+  save();
+  startSession();
+};
+$('voiceChip').onclick = () => openVoiceSheet(S.lang);
+$('voiceEnBtn').onclick = () => openVoiceSheet('en');
+$('voiceZhBtn').onclick = () => openVoiceSheet('zh');
 const DURATIONS = [[0, 'Không giới hạn'], [10, '10 giây'], [15, '15 giây'], [20, '20 giây'], [30, '30 giây'], [60, '60 giây']];
 $('timerChip').onclick = () => {
   openSheet('Thời gian đoán mỗi từ', optionList(DURATIONS.map(([v, label]) => ({ v, label })), S.set.dur, (v) => {
@@ -1089,7 +1303,7 @@ document.addEventListener('keydown', (e) => {
   if (revealed) {
     if (e.key === '1') { e.preventDefault(); rate(false); }
     else if (e.key === '2' || (e.key === 'Enter' && !typing && e.target.tagName !== 'BUTTON')) { e.preventDefault(); rate(true); }
-    else if (e.key.toLowerCase() === 'p' && !typing) speak(card.t, card.lang, $('speakBtn'));
+    else if (e.key.toLowerCase() === 'p' && !typing) speakItem(card, $('speakBtn'));
   } else if (!typing && e.key === ' ') { e.preventDefault(); reveal('manual'); }
 });
 
@@ -1170,7 +1384,7 @@ function moreLibrary() {
       <div class="wr-main"><div class="wr-top"><span class="wr-word ${w.lang === 'zh' ? 'zh' : ''}">${esc(w.t)}</span><span class="wr-meta">${esc(meta)}</span></div>
       <div class="wr-mean">${esc(w.m)}</div></div>
       <button class="icon-btn" aria-label="Nghe ${esc(w.t)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg></button>`;
-    li.querySelector('button').onclick = (e) => { e.stopPropagation(); speak(w.t, w.lang, e.currentTarget); };
+    li.querySelector('button').onclick = (e) => { e.stopPropagation(); speakItem(w, e.currentTarget); };
     li.onclick = () => openDetail(w);
     li.onkeydown = (e) => { if (e.key === 'Enter') openDetail(w); };
     frag.append(li);
@@ -1199,11 +1413,12 @@ function openDetail(w) {
     <p class="answer-sub">${esc(w.lang === 'zh' ? w.py : [w.ipa, w.p].filter(Boolean).join(' · '))}</p>
     <p class="meaning">${esc(w.m)}</p>
     ${w.lang === 'zh' ? `<p class="answer-gloss">EN: ${esc(w.g)}${w.p ? ' · ' + esc(w.p) : ''}</p>` : ''}
-    ${w.ex ? `<div class="example"><p class="ex-en">${esc(w.ex)}</p></div>` : ''}
+    ${w.ex ? `<div class="example"><p class="ex-en">${esc(w.ex)}</p>${w.xv ? `<p class="ex-vi">${esc(w.xv)}</p>` : ''}<div class="ex-actions"><button class="link-btn" id="dExSpeak">🔊 Nghe câu</button></div></div>` : ''}
     <p class="pill" style="align-self:flex-start">${esc(LEVELS[w.lang][w.l] || '')} · ${esc(status)}</p>
     <div class="actions"><button class="btn ${r ? 'ghost' : 'primary'}" id="dToggle">${r ? 'Bỏ khỏi danh sách ôn' : '＋ Thêm vào ôn tập hôm nay'}</button></div>`;
   openSheet(w.lang === 'zh' ? 'Chi tiết chữ Hán' : 'Chi tiết từ', d);
-  d.querySelector('#dSpeak').onclick = (e) => speak(w.t, w.lang, e.currentTarget);
+  d.querySelector('#dSpeak').onclick = (e) => speakItem(w, e.currentTarget);
+  d.querySelector('#dExSpeak')?.addEventListener('click', (e) => speakItem(w, e.currentTarget, 'ex'));
   d.querySelector('#dToggle').onclick = () => {
     if (S.srs[w.id]) { delete S.srs[w.id]; toast('Đã bỏ khỏi danh sách ôn.'); }
     else { S.srs[w.id] = { b: 0, d: today(), n: 0, l: 0, v: w.l }; toast('Đã thêm — vào Học › Ôn tập để ôn ngay.'); }
@@ -1310,7 +1525,6 @@ function renderSettings() {
   segSetting('setAutoNext', [[0, 'Tắt'], [2, '2s'], [3, '3s'], [5, '5s']], 'autoNext', renderStudyChrome);
   segSetting('setSize', [[10, '10'], [20, '20'], [30, '30'], [50, '50']], 'size', () => { studyDirty = true; });
   segSetting('setGoal', [[10, '10'], [20, '20'], [30, '30'], [50, '50']], 'goal');
-  segSetting('setAccent', [['en-US', 'Mỹ'], ['en-GB', 'Anh']], 'accent');
   segSetting('setRate', [[0.75, 'Chậm'], [0.9, 'Vừa'], [1, 'Nhanh']], 'rate');
   segSetting('setTheme', [['auto', 'Tự động'], ['light', 'Sáng'], ['dark', 'Tối']], 'theme', applyTheme);
   $('setAutoSpeak').checked = !!S.set.autoSpeak;
@@ -1318,7 +1532,9 @@ function renderSettings() {
 }
 $('setAutoSpeak').onchange = (e) => { S.set.autoSpeak = e.target.checked; save(); };
 $('setHaptic').onchange = (e) => { S.set.haptic = e.target.checked; save(); };
-$('testVoice').onclick = () => speak(S.lang === 'zh' ? '你好，欢迎学习中文' : 'Welcome to Daily vocab', S.lang);
+$('testVoice').onclick = (e) => speakItem(S.lang === 'zh'
+  ? { lang: 'zh', t: '你好', l: 1 }
+  : { lang: 'en', t: 'customs clearance', l: 5 }, e.currentTarget);
 
 $('exportBtn').onclick = () => {
   const d = new Date();
@@ -1398,6 +1614,8 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 /* ======================= Khởi động ======================= */
 
 applyTheme();
+renderVoiceLabels();
+if ('speechSynthesis' in window) speechSynthesis.addEventListener?.('voiceschanged', renderVoiceLabels);
 setChecked(document.querySelector('.lang-seg'), 'data-lang', S.lang);
 renderSettings();
 loadMeta().catch(() => null);

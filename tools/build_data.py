@@ -178,6 +178,45 @@ def build_zh(hsk_path: Path, cvdict_path: Path) -> list:
     return rows
 
 
+def espeak_ipa(text: str) -> str:
+    """IPA dự phòng bằng espeak-ng (qua kokoro-onnx), đổi ký hiệu kiểu Mỹ
+    (ɹ, ɾ, ɚ, ᵻ) sang ký hiệu quen dùng trong từ điển học tập. Thiếu thư viện
+    thì trả chuỗi rỗng."""
+    try:
+        from kokoro_onnx.tokenizer import Tokenizer
+    except ImportError:
+        return ""
+    ph = Tokenizer().phonemize(text, "en-us")
+    for x, y in (("ɹ", "r"), ("ɾ", "t"), ("ɚ", "ər"), ("ᵻ", "ɪ"), ("ɐ", "ə")):
+        ph = ph.replace(x, y)
+    return "/" + ph.strip() + "/" if ph.strip() else ""
+
+
+def build_customs(en: list) -> list:
+    """Đóng gói bộ thuật ngữ Hải quan (tools/customs_terms.py) thành cấp 5.
+
+    Phiên âm IPA ghép từ phiên âm từng từ đã có trong kho Anh–Việt (nguồn
+    CMUdict qua thichhoc-dict); thiếu một từ thì để trống cả cụm cho khỏi sai.
+
+    Args:
+        en: kho Anh–Việt đã dựng, để tra IPA.
+    Returns:
+        Danh sách ``[en, vi, pos, ipa, ex, 5, chủ đề, dịch ví dụ]``.
+    """
+    sys.path.insert(0, str(Path(__file__).parent))
+    import customs_terms
+
+    ipa = {r[0].lower(): r[3].strip("/") for r in en if r[3]}
+    out = []
+    for topic, term, pos, vi, ex, ex_vi in customs_terms.rows():
+        words = re.findall(r"[A-Za-z']+", term)
+        parts = [ipa.get(w.lower()) for w in words]
+        joined = "/" + " ".join(parts) + "/" if words and all(parts) else espeak_ipa(term)
+        out.append([term, vi, pos, joined, ex, 5, customs_terms.TOPICS[topic - 1], ex_vi])
+    print(f"hải quan: {len(out)} thuật ngữ, {sum(1 for r in out if r[3])} có IPA")
+    return out
+
+
 def main():
     html, hsk, cvd = map(Path, sys.argv[1:4])
     OUT.mkdir(exist_ok=True)
@@ -185,13 +224,16 @@ def main():
     # Tách kho Anh theo cấp: mở app chỉ tải cấp đang học (cấp 1 ≈ 0,4 MB) thay vì 11 MB.
     files = {f"en-{lv}": [r for r in en if r[5] == lv] for lv in (1, 2, 3, 4)}
     files["zh"] = build_zh(hsk, cvd)
+    # Cấp 5 = mục "Tiếng Anh chuyên ngành Hải quan".
+    files["en-5"] = build_customs(en)
     for name, rows in files.items():
         (OUT / f"{name}.json").write_text(json.dumps(rows, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     # meta.json: số từ mỗi cấp + danh sách chủ đề, để app vẽ bộ lọc/tiến độ
     # mà không phải tải hết 11 MB dữ liệu.
     topics = sorted({r[6] for r in en if r[6]})
     meta = {
-        "en": {"levels": {lv: len(files[f"en-{lv}"]) for lv in (1, 2, 3, 4)}, "topics": topics},
+        "en": {"levels": {lv: len(files[f"en-{lv}"]) for lv in (1, 2, 3, 4, 5)}, "topics": topics,
+               "hqTopics": __import__("customs_terms").TOPICS},
         "zh": {"levels": {lv: sum(1 for r in files["zh"] if r[4] == lv) for lv in range(1, 8)}},
     }
     (OUT / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
