@@ -97,7 +97,7 @@ function loadState() {
     const raw = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
     return {
       ...structuredClone(DEFAULTS), ...raw,
-      f: { en: { ...DEFAULTS.f.en, ...(raw.f?.en || {}) }, zh: { ...DEFAULTS.f.zh, ...(raw.f?.zh || {}) } },
+      f: { en: { ...DEFAULTS.f.en, ...((raw.f && raw.f.en) || {}) }, zh: { ...DEFAULTS.f.zh, ...((raw.f && raw.f.zh) || {}) } },
       set: { ...DEFAULTS.set, ...(raw.set || {}) },
       srs: raw.srs || {}, days: raw.days || {},
     };
@@ -154,7 +154,7 @@ function filesFor(lang, lv) {
 }
 async function loadItems(lang, lv) {
   const parts = await Promise.all(filesFor(lang, lv).map(loadFile));
-  let items = parts.flat();
+  let items = parts.reduce((a, b) => a.concat(b), []);
   if (lang === 'zh' && lv !== 'all') items = items.filter((w) => String(w.l) === String(lv));
   return items;
 }
@@ -164,10 +164,10 @@ async function itemsByIds(ids) {
   const names = new Set();
   for (const id of ids) {
     if (id.startsWith('z:')) names.add('zh');
-    else if (S.srs[id]?.v) names.add('en-' + S.srs[id].v);
+    else if ((S.srs[id] && S.srs[id].v)) names.add('en-' + S.srs[id].v);
     else ['en-1', 'en-2', 'en-3', 'en-4'].forEach((n) => names.add(n));
   }
-  const all = (await Promise.all([...names].map(loadFile))).flat();
+  const all = (await Promise.all([...names].map(loadFile))).reduce((a, b) => a.concat(b), []);
   const map = new Map(all.map((w) => [w.id, w]));
   return ids.map((id) => map.get(id)).filter(Boolean);
 }
@@ -216,7 +216,7 @@ function grade(id, good, gain = 1, lv = 0) {
   return INTERVALS[r.b];
 }
 function nextInterval(id, gain) {
-  const b = Math.min(INTERVALS.length - 1, (S.srs[id]?.b || 0) + gain);
+  const b = Math.min(INTERVALS.length - 1, ((S.srs[id] && S.srs[id].b) || 0) + gain);
   return INTERVALS[b];
 }
 function daysText(n) { return n <= 0 ? 'hôm nay' : n === 1 ? '1 ngày' : n < 30 ? `${n} ngày` : `${Math.round(n / 30)} tháng`; }
@@ -311,9 +311,9 @@ const player = new Audio();
 player.preload = 'auto';
 let playingBtn = null;
 function markPlaying(btn) {
-  playingBtn?.classList.remove('playing');
+  if (playingBtn) playingBtn.classList.remove('playing');
   playingBtn = btn || null;
-  playingBtn?.classList.add('playing');
+  if (playingBtn) playingBtn.classList.add('playing');
 }
 player.onended = () => markPlaying(null);
 
@@ -512,8 +512,8 @@ function openSheet(title, body, onClose) {
   $('sheetBackdrop').hidden = false;
   sheetOnClose = onClose || null;
   const first = b.querySelector('[aria-checked="true"]') || b.querySelector('button');
-  first?.focus({ preventScroll: true });
-  first?.scrollIntoView?.({ block: 'nearest' });
+  if (first) first.focus({ preventScroll: true });
+  if (first && first.scrollIntoView) first.scrollIntoView({ block: 'nearest' });
 }
 function closeSheet() {
   if ($('sheet').hidden) return;
@@ -521,7 +521,7 @@ function closeSheet() {
   $('sheetBackdrop').hidden = true;
   const cb = sheetOnClose;
   sheetOnClose = null;
-  cb?.();
+  if (cb) cb();
   resumeTimer();
 }
 $('sheetBackdrop').onclick = closeSheet;
@@ -977,7 +977,7 @@ function micError(code) {
 function stopMic() {
   const r = rec;
   rec = null;
-  try { r?.abort(); } catch (e) { /* đã dừng */ }
+  try { if (r) r.abort(); } catch (e) { /* đã dừng */ }
   $('micBtn').classList.remove('on');
   $('micBtn').setAttribute('aria-pressed', 'false');
   $('answerInput').classList.remove('listening');
@@ -1136,7 +1136,7 @@ function cancelAutoNext() {
   autoNextId = null;
   $('goodBtn').classList.remove('auto');
   $('againBtn').classList.remove('auto');
-  $('autoStop')?.remove();
+  { const _e = $('autoStop'); if (_e) _e.remove(); }
 }
 
 /** Hiện câu ví dụ (chỉ tiếng Anh), tô đậm từ đang học. */
@@ -1228,7 +1228,7 @@ $('sumReview').onclick = () => setMode('review');
 
 /* ---------- Chip bộ lọc ---------- */
 function openLevelSheet() {
-  const lang = S.lang, counts = DB.meta?.[lang]?.levels || {};
+  const lang = S.lang, counts = (DB.meta && DB.meta[lang] && DB.meta[lang].levels) || {};
   const opts = [{ v: 'all', label: 'Tất cả các cấp', note: lang === 'en' ? 'Tải toàn bộ ~85.000 từ' : '' }]
     .concat(Object.entries(LEVELS[lang]).map(([v, label]) => ({
       v, label, note: [counts[v] ? counts[v].toLocaleString('vi-VN') + ' từ' : '', LEVEL_NOTE[lang][v] || ''].filter(Boolean).join(' · '),
@@ -1350,9 +1350,9 @@ async function renderLibrary(reset) {
     const qz = q.replace(/\s+/g, '');
     const scored = [];
     for (const w of items) {
-      w._k ??= fold(w.t);
-      w._m ??= fold(w.m);
-      if (lang === 'zh') w._p ??= fold(w.py).replace(/\s+/g, '');
+      if (w._k === undefined || w._k === null) w._k = fold(w.t);
+      if (w._m === undefined || w._m === null) w._m = fold(w.m);
+      if (lang === 'zh' && (w._p === undefined || w._p === null)) w._p = fold(w.py).replace(/\s+/g, '');
       let s = -1;
       if (w._k === q || (lang === 'zh' && w._p === qz)) s = 0;
       else if (w._k.startsWith(q) || (lang === 'zh' && w._p.startsWith(qz))) s = 1;
@@ -1418,14 +1418,14 @@ function openDetail(w) {
     <div class="actions"><button class="btn ${r ? 'ghost' : 'primary'}" id="dToggle">${r ? 'Bỏ khỏi danh sách ôn' : '＋ Thêm vào ôn tập hôm nay'}</button></div>`;
   openSheet(w.lang === 'zh' ? 'Chi tiết chữ Hán' : 'Chi tiết từ', d);
   d.querySelector('#dSpeak').onclick = (e) => speakItem(w, e.currentTarget);
-  d.querySelector('#dExSpeak')?.addEventListener('click', (e) => speakItem(w, e.currentTarget, 'ex'));
+  { const _e = d.querySelector('#dExSpeak'); if (_e) _e.addEventListener('click', (e) => speakItem(w, e.currentTarget, 'ex')); }
   d.querySelector('#dToggle').onclick = () => {
     if (S.srs[w.id]) { delete S.srs[w.id]; toast('Đã bỏ khỏi danh sách ôn.'); }
     else { S.srs[w.id] = { b: 0, d: today(), n: 0, l: 0, v: w.l }; toast('Đã thêm — vào Học › Ôn tập để ôn ngay.'); }
     save();
     refreshDue();
     closeSheet();
-    const row = [...$('wordList').children].find((li) => li.querySelector('.wr-word')?.textContent === w.t);
+    const row = [...$('wordList').children].find((li) => (li.querySelector('.wr-word') || {}).textContent === w.t);
     if (row) row.querySelector('.wr-state').className = 'wr-state ' + wordState(w.id);
   };
 }
@@ -1471,12 +1471,12 @@ async function renderProgress() {
   const byLevel = {};
   for (const [id, r] of Object.entries(S.srs)) {
     if (!id.startsWith(pre)) continue;
-    const lv = r.v ?? '?';
-    byLevel[lv] ??= { k: 0, l: 0 };
+    const lv = (r.v === undefined || r.v === null) ? '?' : r.v;
+    if (byLevel[lv] === undefined || byLevel[lv] === null) byLevel[lv] = { k: 0, l: 0 };
     if (r.b >= KNOWN_BOX) byLevel[lv].k++; else byLevel[lv].l++;
   }
   for (const [lv, label] of Object.entries(LEVELS[lang])) {
-    const total = meta?.[lang]?.levels?.[lv] || 0;
+    const total = (meta && meta[lang] && meta[lang].levels && meta[lang].levels[lv]) || 0;
     const s = byLevel[lv] || { k: 0, l: 0 };
     const row = document.createElement('div');
     row.innerHTML = `<div class="lv-top"><b>${label}</b><span>${s.k.toLocaleString('vi-VN')} thuộc · ${s.l.toLocaleString('vi-VN')} đang học / ${total.toLocaleString('vi-VN')}</span></div>
@@ -1515,7 +1515,7 @@ function segSetting(id, opts, key, after) {
       S.set[key] = typeof v === 'number' ? Number(v) : v;
       save();
       setChecked(box, 'data-v', v);
-      after?.();
+      if (after) after();
     };
     box.append(b);
   }
@@ -1574,7 +1574,7 @@ $('importFile').onchange = async (e) => {
 function loadStateFrom(raw) {
   return {
     ...structuredClone(DEFAULTS), ...raw,
-    f: { en: { ...DEFAULTS.f.en, ...(raw.f?.en || {}) }, zh: { ...DEFAULTS.f.zh, ...(raw.f?.zh || {}) } },
+    f: { en: { ...DEFAULTS.f.en, ...((raw.f && raw.f.en) || {}) }, zh: { ...DEFAULTS.f.zh, ...((raw.f && raw.f.zh) || {}) } },
     set: { ...DEFAULTS.set, ...(raw.set || {}) },
   };
 }
@@ -1615,7 +1615,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 
 applyTheme();
 renderVoiceLabels();
-if ('speechSynthesis' in window) speechSynthesis.addEventListener?.('voiceschanged', renderVoiceLabels);
+if ('speechSynthesis' in window) if (speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', renderVoiceLabels);
 setChecked(document.querySelector('.lang-seg'), 'data-lang', S.lang);
 renderSettings();
 loadMeta().catch(() => null);
